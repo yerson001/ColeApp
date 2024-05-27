@@ -1,47 +1,119 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:coleapp/components/button.dart';
 import 'package:coleapp/components/colors.dart';
 import 'package:coleapp/components/textfield.dart';
-import 'package:coleapp/models/users.dart';
-import 'package:coleapp/views/profile.dart';
-import 'package:coleapp/views/signup.dart';
-
-import '../SQLite/database_helper.dart';
+import 'package:coleapp/components/QRScanner.dart';
+import 'package:hive/hive.dart';
+import 'package:coleapp/models/student.dart'; // Asegúrate de importar el modelo Student
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({Key? key}) : super(key: key);
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  _LoginScreenState createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  //Our controllers
-  //Controller is used to take the value from user and pass it to database
-  final usrName = TextEditingController();
-  final password = TextEditingController();
+  final TextEditingController _usrNameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _isChecked = false;
+  bool _isLoggingIn = false;
+  bool _isLoginTrue = false;
+  String _apiResponse = '';
 
-  bool isChecked = false;
-  bool isLoginTrue = false;
+  @override
+  void initState() {
+    super.initState();
+    _insertSampleData();
+  }
 
-  final db = DatabaseHelper();
-  //Login Method
-  //We will take the value of text fields using controllers in order to verify whether details are correct or not
-  login() async {
-    Users? usrDetails = await db.getUser(usrName.text);
-    var res = await db
-        .authenticate(Users(usrName: usrName.text, password: password.text));
-    if (res == true) {
-      //If result is correct then go to profile or home
-      if (!mounted) return;
-      Navigator.push(
+  void _insertSampleData() async {
+    var box = Hive.box<Student>('students');
+    if (box.isEmpty) { // Asegúrate de no insertar duplicados
+      var students = [
+        Student(
+          firstName: 'NAYDA EBELIN',
+          lastName: 'ALVARO CHIPA',
+          dni: '90110001',
+          gender: 'M',
+          school: 5,
+          profileImage: '',
+          level: 7,
+          grade: 27,
+          section: 52,
+        ),
+        Student(
+          firstName: 'RUMI RODOLFO',
+          lastName: 'CARRILLO CABRERA',
+          dni: '90110002',
+          gender: 'H',
+          school: 5,
+          profileImage: '',
+          level: 7,
+          grade: 27,
+          section: 52,
+        ),
+        // Agrega los otros estudiantes aquí
+      ];
+
+      for (var student in students) {
+        await box.add(student);
+      }
+    }
+  }
+
+  Future<void> _login() async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isLoggingIn = true;
+    });
+
+    final String username = _usrNameController.text;
+    final String password = _passwordController.text;
+
+    // Construye el cuerpo de la solicitud en formato JSON
+    final Map<String, dynamic> requestBody = {
+      'username': username,
+      'password': password,
+    };
+
+    final Uri apiUrl = Uri.parse('https://colecheck.com/api/login');
+
+    try {
+      final http.Response response = await http.post(
+        apiUrl,
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+        body: jsonEncode(requestBody),
+      );
+
+      // Imprime la respuesta de la API en la consola
+      print('Respuesta de la API: ${response.body}');
+
+      if (response.statusCode == 200) {
+        // Si la autenticación es exitosa, navega a la página de escaneo de QR
+        Navigator.push(
           context,
           MaterialPageRoute(
-              builder: (context) => Profile(profile: usrDetails)));
-    } else {
-      //Otherwise show the error message
+            builder: (context) => QRScannerPage(apiResponse: response.body),
+          ),
+        );
+      } else {
+        // Si hay un error de autenticación, muestra el mensaje de error
+        setState(() {
+          _isLoginTrue = true;
+          _apiResponse = response.body;
+        });
+      }
+    } catch (e) {
+      print('Error en la solicitud de autenticación: $e');
+      // Manejo de errores de red u otros
+    } finally {
       setState(() {
-        isLoginTrue = true;
+        _isLoggingIn = false;
       });
     }
   }
@@ -56,9 +128,9 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 SizedBox(
-                  height: 150, // Ajusta este valor según sea necesario
+                  height: 150,
                   child: Center(
-                    child: Image.asset("assets/logo.png", height: 70), // Ajusta el valor de height según sea necesario
+                    child: Image.asset("assets/logo.png", height: 70),
                   ),
                 ),
                 const Text(
@@ -66,36 +138,33 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: TextStyle(color: primaryColor, fontSize: 20),
                 ),
                 InputField(
-                    hint: "Nombre de usuario",
-                    icon: Icons.account_circle,
-                    controller: usrName),
+                  hint: "Nombre de usuario",
+                  icon: Icons.account_circle,
+                  controller: _usrNameController,
+                ),
                 InputField(
-                    hint: "Contraseña",
-                    icon: Icons.lock,
-                    controller: password,
-                    passwordInvisible: true),
-
+                  hint: "Contraseña",
+                  icon: Icons.lock,
+                  controller: _passwordController,
+                  passwordInvisible: true,
+                ),
                 ListTile(
                   horizontalTitleGap: 2,
                   title: const Text("Recuérdame"),
                   leading: Checkbox(
                     activeColor: primaryColor,
-                    value: isChecked,
+                    value: _isChecked,
                     onChanged: (value) {
                       setState(() {
-                        isChecked = !isChecked;
+                        _isChecked = value ?? false;
                       });
                     },
                   ),
                 ),
-
-                //Our login button
                 Button(
-                    label: "INICIAR SESIÓN",
-                    press: () {
-                      login();
-                    }),
-
+                  label: "INICIAR SESIÓN",
+                  press: _login,
+                ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -104,23 +173,25 @@ class _LoginScreenState extends State<LoginScreen> {
                       style: TextStyle(color: Colors.grey),
                     ),
                     TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => const SignupScreen()));
-                        },
-                        child: const Text("REGISTRARSE"))
+                      onPressed: () {},
+                      child: const Text("REGISTRARSE"),
+                    ),
                   ],
                 ),
-
-                // Access denied message in case when your username and password is incorrect
-                //By default we must hide it
-                //When login is not true then display the message
-                isLoginTrue
+                // Mensaje de error de acceso denegado en caso de que el nombre de usuario y la contraseña sean incorrectos
+                _isLoginTrue
                     ? Text(
                         " El nombre de usuario o la contraseña son incorrectos",
                         style: TextStyle(color: Colors.red.shade900),
+                      )
+                    : const SizedBox(),
+                // Diálogo de carga
+                _isLoggingIn
+                    ? Container(
+                        color: Colors.black.withOpacity(0.5),
+                        child: Center(
+                          child: CircularProgressIndicator(),
+                        ),
                       )
                     : const SizedBox(),
               ],

@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 
 Users usersFromMap(String str) => Users.fromMap(json.decode(str));
@@ -19,6 +18,7 @@ class Users {
     required this.usrName,
     required this.password,
   });
+
 
   //These json value must be same as your column name in database that we have already defined
   //one column didn't match

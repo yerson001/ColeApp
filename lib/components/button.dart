@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:coleapp/Components/colors.dart';
+import 'package:coleapp/components/colors.dart';
 
 //We are going to design our own button
 
